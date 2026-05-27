@@ -1,0 +1,203 @@
+{
+  "name": "Triagem de inscricoes - fluxo simples",
+  "active": false,
+  "settings": {},
+  "nodes": [
+    {
+      "parameters": {
+        "path": "triagem-cnpj",
+        "httpMethod": "POST",
+        "responseMode": "responseNode"
+      },
+      "id": "1",
+      "name": "Receber Cadastro",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [
+        360,
+        320
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const input = $input.first().json;\nconst rawCnpj = String(input.cnpj ?? '');\nconst digits = rawCnpj.replace(/\\D/g, '');\n\nfunction formatCnpj(value) {\n  if (!/^\\d{14}$/.test(value)) return value;\n  return value.replace(/^(\\d{2})(\\d{3})(\\d{3})(\\d{4})(\\d{2})$/, '$1.$2.$3/$4-$5');\n}\n\nfunction isValidCnpj(cnpj) {\n  if (!/^\\d{14}$/.test(cnpj)) return false;\n  if (/^(\\d)\\1{13}$/.test(cnpj)) return false;\n\n  const calcDigit = (base) => {\n    let sum = 0;\n    let weight = base.length - 7;\n\n    for (let i = 0; i < base.length; i++) {\n      sum += Number(base[i]) * weight--;\n      if (weight < 2) weight = 9;\n    }\n\n    const rest = sum % 11;\n    return rest < 2 ? 0 : 11 - rest;\n  };\n\n  const base12 = cnpj.slice(0, 12);\n  const digit1 = calcDigit(base12);\n  const digit2 = calcDigit(base12 + String(digit1));\n\n  return cnpj === base12 + String(digit1) + String(digit2);\n}\n\nconst cnpjValido = isValidCnpj(digits);\n\nreturn [{\n  json: {\n    ...input,\n    cnpjLimpo: digits,\n    cnpjFormatado: formatCnpj(digits),\n    cnpjValido,\n    mensagemValidacao: cnpjValido ? 'CNPJ valido' : 'CNPJ invalido'\n  }\n}];"
+      },
+      "id": "2",
+      "name": "Normalizar CNPJ",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        620,
+        320
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "boolean": [
+            {
+              "value1": "={{ $json.cnpjValido }}",
+              "value2": true
+            }
+          ]
+        }
+      },
+      "id": "3",
+      "name": "CNPJ Valido?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        860,
+        320
+      ]
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "={{ 'https://brasilapi.com.br/api/cnpj/v1/' + $json.cnpjLimpo }}",
+        "responseFormat": "json"
+      },
+      "id": "4",
+      "name": "Consultar BrasilAPI",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [
+        1100,
+        200
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const api = $input.first().json;\nconst cadastro = $('Normalizar CNPJ').item.json;\n\nreturn [{\n  json: {\n    status: 'ok',\n    mensagem: 'Cadastro validado com sucesso',\n    cnpj: cadastro.cnpjFormatado,\n    cnpjLimpo: cadastro.cnpjLimpo,\n    razaoSocial: api.razao_social ?? api.razaoSocial ?? '',\n    nomeFantasia: api.nome_fantasia ?? '',\n    situacaoCadastral: api.descricao_situacao_cadastral ?? '',\n    municipio: api.municipio ?? '',\n    uf: api.uf ?? '',\n    porte: api.porte ?? '',\n    cnaePrincipal: api.cnae_fiscal_descricao ?? '',\n    inicioAtividade: api.data_inicio_atividade ?? ''\n  }\n}];"
+      },
+      "id": "5",
+      "name": "Montar Resposta",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1330,
+        200
+      ]
+    },
+    {
+      "parameters": {
+        "respondWith": "firstIncomingItem",
+        "options": {
+          "responseCode": 200
+        }
+      },
+      "id": "6",
+      "name": "Responder Sucesso",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [
+        1560,
+        200
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const cadastro = $('Normalizar CNPJ').item.json;\n\nreturn [{\n  json: {\n    status: 'erro',\n    mensagem: 'CNPJ invalido. Verifique os 14 digitos e tente novamente.',\n    cnpj: cadastro.cnpjFormatado || cadastro.cnpj || '',\n    cnpjLimpo: cadastro.cnpjLimpo || ''\n  }\n}];"
+      },
+      "id": "7",
+      "name": "Montar Erro",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1100,
+        460
+      ]
+    },
+    {
+      "parameters": {
+        "respondWith": "firstIncomingItem",
+        "options": {
+          "responseCode": 400
+        }
+      },
+      "id": "8",
+      "name": "Responder Erro",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [
+        1330,
+        460
+      ]
+    }
+  ],
+  "connections": {
+    "Receber Cadastro": {
+      "main": [
+        [
+          {
+            "node": "Normalizar CNPJ",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Normalizar CNPJ": {
+      "main": [
+        [
+          {
+            "node": "CNPJ Valido?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "CNPJ Valido?": {
+      "main": [
+        [
+          {
+            "node": "Consultar BrasilAPI",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Montar Erro",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Consultar BrasilAPI": {
+      "main": [
+        [
+          {
+            "node": "Montar Resposta",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Montar Resposta": {
+      "main": [
+        [
+          {
+            "node": "Responder Sucesso",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Montar Erro": {
+      "main": [
+        [
+          {
+            "node": "Responder Erro",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  }
+}
