@@ -2,7 +2,7 @@
 
 Materiais do minicurso **Automatizando processos com N8N**, apresentado no **IF SUMMIT 2026**.
 
-O repositório contém slides, apostila, roteiro do instrutor, exercícios, workflow importável e ambiente local com Docker Compose para executar o n8n durante a prática.
+O repositório contém slides, apostila, exercícios, workflow importável e ambiente local com Docker Compose para executar o n8n durante a prática.
 
 ## Informações do Minicurso
 
